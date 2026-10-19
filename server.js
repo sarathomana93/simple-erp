@@ -36,7 +36,9 @@ export function createApp(store,{secure=true}={}){
  });
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)){
- const {default:pg}=await import('pg');if(!process.env.DATABASE_URL)throw Error('DATABASE_URL is required');const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.DATABASE_SSL==='true'?{rejectUnauthorized:true}:undefined,max:5,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});pool.on('error',()=>console.error('Database connection interrupted'));
- const store=new PgStore(pool);await store.init(process.env.ERP_ADMIN_HASH);const server=createApp(store,{secure:process.env.NODE_ENV==='production'});server.listen(Number(process.env.PORT||3000),'0.0.0.0',()=>console.log('ERP server ready'));
- const stop=()=>{server.close(async()=>{await pool.end();process.exit(0)});setTimeout(()=>process.exit(1),25000).unref()};process.on('SIGTERM',stop);process.on('SIGINT',stop);
+ let store,pool;
+ if(process.env.ERP_GATEWAY_URL&&process.env.ERP_GATEWAY_TOKEN){const {RemoteStore}=await import('./remote-store.js');store=new RemoteStore(process.env.ERP_GATEWAY_URL,process.env.ERP_GATEWAY_TOKEN)}
+ else{const {default:pg}=await import('pg');if(!process.env.DATABASE_URL)throw Error('Database configuration required');pool=new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.DATABASE_SSL==='true'?{rejectUnauthorized:true}:undefined,max:5,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});pool.on('error',()=>console.error('Database connection interrupted'));store=new PgStore(pool)}
+ await store.init(process.env.ERP_ADMIN_HASH);const server=createApp(store,{secure:process.env.NODE_ENV==='production'});server.listen(Number(process.env.PORT||3000),'0.0.0.0',()=>console.log('ERP server ready'));
+ const stop=()=>{server.close(async()=>{await pool?.end();process.exit(0)});setTimeout(()=>process.exit(1),25000).unref()};process.on('SIGTERM',stop);process.on('SIGINT',stop);
 }
