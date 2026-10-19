@@ -5,7 +5,7 @@ export function hashPassword(p){const salt=randomBytes(16).toString('hex');retur
 export function verifyPassword(p,hash){try{const [salt,value]=hash.split(':');return timingSafeEqual(scryptSync(p,salt,64),Buffer.from(value,'hex'))}catch{return false}}
 export function validateData(data){
  if(!data||typeof data!=='object')throw Error('Invalid records');const clean={};
- for(const key of ['items','suppliers','customers','invoices']){
+ for(const key of ['items','suppliers','customers','units','invoices']){
   const rows=data[key]??[];if(!Array.isArray(rows)||rows.length>50000)throw Error('Invalid '+key);const ids=new Set(),codes=new Set();
   for(const r of rows){if(!r||typeof r!=='object'||typeof r.id!=='string'||!/^[a-zA-Z0-9_-]{1,100}$/.test(r.id)||ids.has(r.id))throw Error('Invalid or duplicate record ID');ids.add(r.id);
    const code=key==='invoices'?r.number:r.code;if(typeof code!=='string'||!code.trim())throw Error('Record code is required');const normalized=code.trim().toLowerCase();if(codes.has(normalized))throw Error('Duplicate '+key+' code: '+code);codes.add(normalized);
