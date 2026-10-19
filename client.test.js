@@ -1,0 +1,19 @@
+import test from 'node:test';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+import {JSDOM} from 'jsdom';
+import {readFile} from 'node:fs/promises';
+import {newDb} from 'pg-mem';
+import {PgStore,hashPassword,emptyData} from './store.js';
+import {createApp} from './server.js';
+const wait=async predicate=>{for(let i=0;i<100;i++){if(predicate())return;await new Promise(r=>setTimeout(r,20))}throw Error('Timed out')};
+test('UI signs in, saves item, imports backup and displays shared data on another device',async t=>{
+ const {Pool}=newDb().adapters.createPg(),pool=new Pool(),store=new PgStore(pool);await store.init(hashPassword('integration-test-password'));const server=createApp(store,{secure:false});await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;const windows=[];
+ t.after(async()=>{windows.forEach(w=>w.close());server.closeAllConnections();await new Promise(r=>server.close(r));await pool.end()});
+ async function device(){const html=(await readFile('dist/index.html','utf8')).replace(/<script[\s\S]*?<\/script>/g,'');const dom=new JSDOM(html,{url:origin,runScripts:'outside-only'}),w=dom.window;windows.push(w);w.alert=message=>{w.lastAlert=message};w.confirm=()=>true;w.AbortSignal=AbortSignal;w.HTMLDialogElement.prototype.showModal=function(){this.open=true};w.HTMLDialogElement.prototype.close=function(){this.open=false};let cookie='';w.fetch=async(path,options={})=>{const r=await fetch(new URL(path,origin),{...options,headers:{...options.headers,...(options.method!=='GET'?{Origin:origin}:{}),Cookie:cookie}});const set=r.headers.get('set-cookie');if(set)cookie=set.split(';')[0];return r};for(const f of ['amount-words.js','app.js','cloud.js'])vm.runInContext(await readFile('dist/'+f,'utf8'),dom.getInternalVMContext());await wait(()=>w.document.querySelector('#cloudStatus').textContent.includes('Sign in'));w.document.querySelector('#loginPassword').value='integration-test-password';w.document.querySelector('#loginForm').dispatchEvent(new w.Event('submit',{cancelable:true}));await wait(()=>!w.document.body.classList.contains('cloud-locked'));w.readRevision=()=>vm.runInContext('cloudRevision',dom.getInternalVMContext());return w}
+ const a=await device();a.document.querySelector('#add').click();a.document.querySelector('#f-code').value='ST001';a.document.querySelector('#f-name').value='Steel';a.document.querySelector('#f-sale').value='100';a.document.querySelector('#form').dispatchEvent(new a.Event('submit',{cancelable:true}));await wait(()=>!a.document.querySelector('#modal').open);assert.equal((await store.get()).data.items[0].name,'Steel');const b=await device();assert(b.document.querySelector('#tbody').textContent.includes('Steel'));
+ const backup={version:1,...emptyData(),customers:[{id:'customer-1',code:'C001',name:'Test customer',status:'Active'}]};await a.importCloudBackup(backup);assert.equal((await store.get()).data.customers.length,1);await a.importCloudBackup(backup);assert.equal((await store.get()).data.customers.length,1);await assert.rejects(()=>a.importCloudBackup({...backup,customers:[{...backup.customers[0],name:'Changed'}]}),/differs/);
+ await b.loadCloud();b.document.querySelector('[data-view=customers]').click();assert(b.document.querySelector('#tbody').textContent.includes('Test customer'));
+ // Background refresh must not replace the revision while a user has a form open.
+ b.document.querySelector('#add').click();const before=b.readRevision();await store.save({...emptyData(),items:[]},(await store.get()).revision);await b.loadCloud();assert.equal(b.readRevision(),before);
+});
