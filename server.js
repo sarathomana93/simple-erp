@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {invoicePDF} from './invoice-pdf.js';
 import {readFile} from 'node:fs/promises';
 import {randomBytes} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
@@ -23,6 +24,7 @@ export function createApp(store,{secure=true}={}){
    const value=randomBytes(32).toString('hex');await store.addSession(value);cookie(value,604800);return json(200,{ok:true});
   }
   if(!/^[a-f0-9]{64}$/.test(token)||!await store.session(token))return json(401,{error:'Please sign in'});
+  if(path.startsWith('/api/invoice-pdf/')&&req.method==='GET'){const id=decodeURIComponent(path.slice('/api/invoice-pdf/'.length));const state=await store.get();const invoice=state.data.invoices.find(i=>i.id===id);if(!invoice)return json(404,{error:'Invoice not found'});const pdf=await invoicePDF(invoice);res.writeHead(200,{'Content-Type':'application/pdf','Content-Disposition':'attachment; filename="invoice.pdf"','Cache-Control':'no-store'});return res.end(pdf)}
   if(path==='/api/logout'&&req.method==='POST'){await store.logout(token);cookie('',0);return json(200,{ok:true})}
   if(path==='/api/password'&&req.method==='POST'){const b=await body(req);if(typeof b.current!=='string'||b.current.length>512||!verifyPassword(b.current,await store.password()))return json(400,{error:'Current password is incorrect'});if(typeof b.password!=='string'||b.password.length<12||b.password.length>128)return json(400,{error:'Use a new password with 12–128 characters'});await store.setPassword(hashPassword(b.password));cookie('',0);return json(200,{ok:true})}
   if(path==='/api/state'&&req.method==='GET')return json(200,await store.get());
