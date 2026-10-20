@@ -11,7 +11,7 @@ export function validateData(data){
    const code=(key==='invoices'||key==='quotations')?r.number:r.code;if(typeof code!=='string'||!code.trim())throw Error('Record code is required');const normalized=code.trim().toLowerCase();if(codes.has(normalized))throw Error('Duplicate '+key+' code: '+code);codes.add(normalized);
    if(key==='invoices'||key==='quotations'){if(typeof r.customer!=='string'||!r.customer.trim()||!Array.isArray(r.lines)||!r.lines.length||r.lines.length>1000)throw Error('Invalid invoice');
     for(const l of r.lines){if(!l||typeof l.desc!=='string'||!l.desc.trim()||![l.qty,l.rate,l.tax].every(x=>x!==''&&Number.isFinite(Number(x)))||Number(l.qty)<=0||Number(l.rate)<0||Number(l.tax)<0||Number(l.tax)>100)throw Error('Invalid invoice line')}
-    if(key==='quotations'&&(r.documentType!=='quotation'||r.lines.some(l=>Number(l.tax)!==0)))throw Error('Quotations must not include GST');if(!Number.isFinite(Number(r.round||0)))throw Error('Invalid round off');
+    if(key==='quotations'&&(!Number.isFinite(Number(r.received??0))||Number(r.received??0)<0))throw Error('Invalid received amount');if(key==='quotations'&&(r.documentType!=='quotation'||r.lines.some(l=>Number(l.tax)!==0)))throw Error('Quotations must not include GST');if(!Number.isFinite(Number(r.round||0)))throw Error('Invalid round off');
    }else{if(typeof r.name!=='string'||!r.name.trim()||!['Active','Inactive'].includes(r.status))throw Error('Invalid master record');if(key==='items')for(const n of ['purchase','sale','tax']){if(!Number.isFinite(Number(r[n]||0))||Number(r[n]||0)<0||(n==='tax'&&Number(r[n])>100))throw Error('Invalid item amount')}}
    if(JSON.stringify(r).length>250000)throw Error('Record too large');
   }clean[key]=rows;
