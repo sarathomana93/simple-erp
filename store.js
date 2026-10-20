@@ -5,13 +5,13 @@ export function hashPassword(p){const salt=randomBytes(16).toString('hex');retur
 export function verifyPassword(p,hash){try{const [salt,value]=hash.split(':');return timingSafeEqual(scryptSync(p,salt,64),Buffer.from(value,'hex'))}catch{return false}}
 export function validateData(data){
  if(!data||typeof data!=='object')throw Error('Invalid records');const clean={};
- for(const key of ['items','suppliers','customers','units','invoices']){
+ for(const key of ['items','suppliers','customers','units','quotations','invoices']){
   const rows=data[key]??[];if(!Array.isArray(rows)||rows.length>50000)throw Error('Invalid '+key);const ids=new Set(),codes=new Set();
   for(const r of rows){if(!r||typeof r!=='object'||typeof r.id!=='string'||!/^[a-zA-Z0-9_-]{1,100}$/.test(r.id)||ids.has(r.id))throw Error('Invalid or duplicate record ID');ids.add(r.id);
-   const code=key==='invoices'?r.number:r.code;if(typeof code!=='string'||!code.trim())throw Error('Record code is required');const normalized=code.trim().toLowerCase();if(codes.has(normalized))throw Error('Duplicate '+key+' code: '+code);codes.add(normalized);
-   if(key==='invoices'){if(typeof r.customer!=='string'||!r.customer.trim()||!Array.isArray(r.lines)||!r.lines.length||r.lines.length>1000)throw Error('Invalid invoice');
+   const code=(key==='invoices'||key==='quotations')?r.number:r.code;if(typeof code!=='string'||!code.trim())throw Error('Record code is required');const normalized=code.trim().toLowerCase();if(codes.has(normalized))throw Error('Duplicate '+key+' code: '+code);codes.add(normalized);
+   if(key==='invoices'||key==='quotations'){if(typeof r.customer!=='string'||!r.customer.trim()||!Array.isArray(r.lines)||!r.lines.length||r.lines.length>1000)throw Error('Invalid invoice');
     for(const l of r.lines){if(!l||typeof l.desc!=='string'||!l.desc.trim()||![l.qty,l.rate,l.tax].every(x=>x!==''&&Number.isFinite(Number(x)))||Number(l.qty)<=0||Number(l.rate)<0||Number(l.tax)<0||Number(l.tax)>100)throw Error('Invalid invoice line')}
-    if(!Number.isFinite(Number(r.round||0)))throw Error('Invalid round off');
+    if(key==='quotations'&&(r.documentType!=='quotation'||r.lines.some(l=>Number(l.tax)!==0)))throw Error('Quotations must not include GST');if(!Number.isFinite(Number(r.round||0)))throw Error('Invalid round off');
    }else{if(typeof r.name!=='string'||!r.name.trim()||!['Active','Inactive'].includes(r.status))throw Error('Invalid master record');if(key==='items')for(const n of ['purchase','sale','tax']){if(!Number.isFinite(Number(r[n]||0))||Number(r[n]||0)<0||(n==='tax'&&Number(r[n])>100))throw Error('Invalid item amount')}}
    if(JSON.stringify(r).length>250000)throw Error('Record too large');
   }clean[key]=rows;
