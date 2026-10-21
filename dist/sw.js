@@ -1,4 +1,4 @@
-const CACHE='ram-erp-shell-cloud-v16';
+const CACHE='ram-erp-shell-cloud-v17';
 const ASSETS=['/','/index.html','/style.css','/app.js','/cloud.js','/amount-words.js','/mobile.js','/logo.png','/manifest.webmanifest','/icon-192.png','/icon-512.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('ram-erp-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
